@@ -1,6 +1,6 @@
 # Pangea Client
 
-`pangea-client` is a set of libraries for different languages to interface with Pangea for access to cross chain data, fast.
+`pangea-client` is a set of libraries for different languages to interface with [Pangea API](https://docs.pangea.foundation/).
 
 When using `python` the data is delivered in Arrow or JSON, developers are required to provide their own types.
 
@@ -8,17 +8,15 @@ When using `python` the data is delivered in Arrow or JSON, developers are requi
 
 ## Getting started
 
-Access to the API via `pangea-client` requires credentials, please apply for access [here](https://pangea.foundation/get-access)
+Access to the API via `pangea-client` requires credentials, please [apply for access](https://pangea.foundation/get-access) first.
 
-Once you have credentials set your environment variables:
+Once credentials are issued, they will need to be set in the environment variables.
 
-You will be given a username and password to use to access the Pangea API.
-The easiest way to use these credentials is to create a `.env` file in the same folder as this `README.md` file, and populate it like so:
+The easiest way to use these credentials is to create a `.env` file **in the same folder as this `README.md` file**, and populate it like so:
 
 ```sh
 PANGEA_USERNAME=xxxxx
 PANGEA_PASSWORD=xxxxx
-PANGEA_URL=app.pangea.foundation
 ```
 
 <br>

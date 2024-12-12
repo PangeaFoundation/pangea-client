@@ -71,7 +71,6 @@ class Client:
         self.is_secure = is_secure
         self.endpoint = f"ws{'s' if is_secure else ''}://{endpoint or os.getenv('PANGEA_URL', DEFAULT_ENDPOINT)}/v1/websocket"
         self.connection: Optional[websockets.WebSocketClientProtocol] = None
-        self.subscriptions = {}
         self.request_handlers = {}
         self.receive_task = None
         self._shutdown_signal = asyncio.Event()
@@ -116,8 +115,8 @@ class Client:
         await self.disconnect()
 
     async def connect(self):
-        if self.connection and not self.connection.closed:
-            return
+        if self.connection:
+            await self.disconnect()
 
         headers = {}
         if self.username and self.password:
@@ -208,36 +207,33 @@ class Client:
         params={},
         format=Format.JsonStream,
         deltas=False,
-        id=None,
-        **_kwargs,
     ):
-        if operation is None and id is None:
+        if not self.connection or not self.connection.open:
+            raise Exception("WebSocket connection expected to be 'OPEN' when sending a request")
+
+        if operation is None:
             raise Exception("Operation is required for a new request")
-        elif id is None:
-            if type(format) is not Format:
-                raise Exception("Invalid format type")
 
-            id = str(uuid.uuid4())
-            request = {
-                "id": id,
-                "operation": operation,
-                "deltas": deltas,
-                "format": format.value,
-                **params,
-            }
-            self.subscriptions[id] = request
+        if type(format) is not Format:
+            raise Exception("Invalid format type")
 
-        if not self.connection or self.connection.closed:
-            await self.disconnect()
+        id = str(uuid.uuid4())
+        request = {
+            "id": id,
+            "operation": operation,
+            "deltas": deltas,
+            "format": format.value,
+            **params,
+        }
 
-        request_queue = asyncio.Queue()
-        self.request_handlers[id] = request_queue
-        await self.connection.send(json.dumps(self.subscriptions[id]))
+        self.request_handlers[id] = asyncio.Queue()
+
+        await self.connection.send(json.dumps(request))
 
         return self.handle_request(id, format)
 
     async def handle_request(self, id, format):
-        while True:
+        while self.connection.open:
             # get the queue
             queue = self.request_handlers.get(id)
             if queue is None:
@@ -258,7 +254,6 @@ class Client:
 
             header_id = header["id"]
             kind = header["kind"]
-            cursor = header.get("cursor")  # use .get() to safely handle missing cursor
 
             if header_id != id:
                 continue
@@ -272,15 +267,10 @@ class Client:
                 else:
                     yield data.decode("utf-8")
 
-                # update cursor for the subscription
-                if cursor and isinstance(cursor, str):
-                    self.subscriptions[id]["cursor"] = cursor
-
             elif kind == Kind.ERROR.value:
                 raise Exception(data.decode("utf-8"))
 
             elif kind == Kind.END.value:
-                self.subscriptions.pop(id, None)  # remove completed subscription
                 break
 
             else:
@@ -288,4 +278,3 @@ class Client:
 
         # cleanup handlers
         self.request_handlers.pop(id, None)
-        self.subscriptions.pop(id, None)

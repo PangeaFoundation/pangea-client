@@ -6,14 +6,14 @@ use std::{
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use futures::{
-    channel::mpsc, select_biased, stream::Fuse, FutureExt, SinkExt, StreamExt, TryStreamExt,
-};
+use futures::{select_biased, stream::Fuse, FutureExt, SinkExt, StreamExt, TryStreamExt};
 use http::header;
 use serde::{Deserialize, Serialize};
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-use tracing::{error, warn};
-use tungstenite::{client::IntoClientRequest, Message};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
+use tokio_tungstenite::{connect_async_with_config, MaybeTlsStream, WebSocketStream};
+use tracing::{debug, error, warn};
+use tungstenite::{client::IntoClientRequest, protocol::WebSocketConfig, Message};
 use uuid::Uuid;
 
 use crate::{
@@ -32,7 +32,7 @@ use crate::{
 const WS_PATH: &str = "v1/websocket";
 
 type WsResult = Result<Vec<u8>>;
-type OperationMsg = (Request, mpsc::UnboundedSender<WsResult>);
+type OperationMsg = (Request, mpsc::Sender<WsResult>);
 
 #[derive(Clone, Debug)]
 pub struct WsProvider {
@@ -47,7 +47,7 @@ impl WsProvider {
         format: Format,
         deltas: bool,
     ) -> StreamResponse<Vec<u8>> {
-        let (sink, stream) = mpsc::unbounded();
+        let (sink, stream) = mpsc::channel(5);
         let id = Uuid::new_v4();
 
         let params = serde_json::to_value(params).map_err(Error::from)?;
@@ -64,10 +64,10 @@ impl WsProvider {
             deltas,
         };
         self.operations
-            .unbounded_send((request, sink))
+            .send((request, sink))
             .map_err(|_| Error::BackendShutDown)?;
 
-        let stream = stream
+        let stream = ReceiverStream::new(stream)
             .map_err(Error::from)
             .filter_map(|data| async {
                 match data {
@@ -112,7 +112,7 @@ impl Provider for WsProvider {
             );
         }
 
-        let (sink, stream) = mpsc::unbounded();
+        let (sink, stream) = mpsc::unbounded_channel();
         let bw = BackgroundWorker::new(req, stream).await?;
         tokio::spawn(bw.main_loop());
 
@@ -439,8 +439,8 @@ impl BtcProvider for WsProvider {
 
 struct BackgroundWorker {
     ws: WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
-    operations: Fuse<mpsc::UnboundedReceiver<OperationMsg>>,
-    subscriptions: HashMap<Uuid, mpsc::UnboundedSender<Result<Vec<u8>>>>,
+    operations: Fuse<UnboundedReceiverStream<OperationMsg>>,
+    subscriptions: HashMap<Uuid, mpsc::Sender<Result<Vec<u8>>>>,
 }
 
 impl BackgroundWorker {
@@ -448,11 +448,17 @@ impl BackgroundWorker {
         ws_server: http::Request<()>,
         operations: mpsc::UnboundedReceiver<OperationMsg>,
     ) -> Result<Self> {
-        let (ws, _) = connect_async(ws_server).await?;
+        let config = WebSocketConfig {
+            max_frame_size: None,
+            max_message_size: None,
+            ..Default::default()
+        };
+        let (ws, _) = connect_async_with_config(ws_server, Some(config), false).await?;
+        let operations = UnboundedReceiverStream::new(operations).fuse();
 
         Ok(Self {
             ws,
-            operations: operations.fuse(),
+            operations,
             subscriptions: HashMap::default(),
         })
     }
@@ -557,10 +563,8 @@ impl BackgroundWorker {
                 },
             },
             Kind::End => {
-                let sink = self.subscriptions.remove(&header.id.0);
-                if let Some(sink) = sink {
-                    sink.close_channel();
-                }
+                debug!("Subscription with id {:?} ended", id);
+                self.subscriptions.remove(&header.id.0);
                 return Ok(());
             }
             Kind::Error => match String::from_utf8(data) {
@@ -570,14 +574,10 @@ impl BackgroundWorker {
             _ => Err(Error::UnexpectedMessageFormat),
         };
 
-        if let std::collections::hash_map::Entry::Occupied(occupied) =
+        if let std::collections::hash_map::Entry::Occupied(mut occupied) =
             self.subscriptions.entry(id.0)
         {
-            if let Err(err) = occupied.get().unbounded_send(msg) {
-                if err.is_disconnected() {
-                    // subscription channel was closed on the receiver end
-                    occupied.remove();
-                }
+            if let Err(err) = occupied.get_mut().send(msg).await {
                 return Err(Error::Custom(
                     format!("failed to send message: {err:?}").into(),
                 ));

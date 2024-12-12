@@ -3,7 +3,6 @@ from pangea_client import Client
 from pangea_client.types import Format
 import asyncio
 import polars as pl
-import polars_evm
 
 load_dotenv(override=True)
 
@@ -26,7 +25,6 @@ async def main():
             else:
                 df = df.extend(pl.read_ipc_stream(block))
 
-            df = df.evm.binary_to_hex()
             print(df)
 
 
