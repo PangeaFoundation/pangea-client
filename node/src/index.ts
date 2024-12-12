@@ -23,6 +23,7 @@ function applyDefaults(options: ClientOptions): ClientOptions {
 const UUID_NIL = "00000000-0000-0000-0000-000000000000";
 const DEFAULT_ENDPOINT = "app.pangea.foundation";
 const PING_INTERVAL = 5_000;
+const WAIT_INTERVAL = 0;
 
 const methodsToEndpointsWithoutParams = [["get_status", "getStatus"]] as const;
 
@@ -84,7 +85,6 @@ export type ClientWithEndpoints = Client & ClientMethodsWithoutParams & ClientMe
 
 export class Client {
   public readonly endpoint: string;
-  public readonly subscriptions: Map<string, { request: any; cursor: string | null }>;
   private _connection: WebSocket;
   private _timeout: number;
   private _data_queues: Map<string, { header: Header; body: Buffer }[]>;
@@ -100,7 +100,7 @@ export class Client {
 
     // wait for connection to establish
     while (client.connection.readyState === WebSocket.CONNECTING) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, WAIT_INTERVAL));
     }
 
     if (client.connection.readyState !== WebSocket.OPEN) {
@@ -145,7 +145,6 @@ export class Client {
     // console.log(`URL: \x1b[1m${endpoint}\x1b[0m`);
     // console.log("");
 
-    this.subscriptions = new Map();
     this._data_queues = new Map();
 
     this._timeout = options.timeout!;
@@ -153,15 +152,31 @@ export class Client {
   }
 
   private createConnection() {
-    const connection = new WebSocket(this.endpoint);
+    const connection = new WebSocket(this.endpoint, {
+      maxPayload: 1024 * 1024 * 1024, // 1GB
+    });
 
-    let alive = true;
+    const timeoutId = setTimeout(() => {
+      console.error("WebSocket connection timed out");
 
-    const onOpen = () => {
+      connection.removeEventListener("error", onError);
       connection.removeEventListener("open", onOpen);
+      connection.terminate();
+    }, this._timeout);
+
+    const onError = (error: any) => {
+      console.error("WebSocket connection encountered an error:", error);
 
       clearTimeout(timeoutId);
 
+      connection.removeEventListener("error", onError);
+      connection.removeEventListener("error", onOpen);
+      connection.terminate();
+    };
+
+    let alive = false; // track connection liveness via pinging
+
+    const onOpen = () => {
       const pingingLoop = setInterval(() => {
         if (connection.readyState !== WebSocket.OPEN) {
           clearInterval(pingingLoop);
@@ -176,8 +191,8 @@ export class Client {
           return;
         }
 
-        // no pong received in time, closing connection
-        console.error("Connection lost...");
+        // no pong (nor message) received in time, closing connection
+        console.error("WebSocket connection lost...");
 
         clearInterval(pingingLoop);
         connection.close();
@@ -190,30 +205,15 @@ export class Client {
       connection.on("close", () => {
         clearInterval(pingingLoop);
       });
-    };
 
-    const onError = (error: any) => {
-      console.error("WebSocket connection encountered an error:", error);
-
+      alive = true;
       clearTimeout(timeoutId);
-
-      connection.removeEventListener("error", onError);
-    };
-
-    const timeoutId = setTimeout(() => {
-      console.error("WebSocket connection timed out");
-
       connection.removeEventListener("open", onOpen);
-      connection.removeEventListener("error", onError);
-
-      connection.terminate();
-    }, this._timeout);
+    };
 
     // store responses from server into their dedicated message queues
     const onMessage = (raw_data: Buffer) => {
-      alive = true;
-
-      if (!raw_data) return;
+      alive = true; // keep alive
 
       const newlineIndex = raw_data.indexOf("\n");
       if (newlineIndex === -1) return;
@@ -241,7 +241,7 @@ export class Client {
     this.disconnect();
 
     while (this._connection.readyState !== WebSocket.CLOSED) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, WAIT_INTERVAL));
     }
 
     this._connection = this.createConnection();
@@ -249,14 +249,12 @@ export class Client {
 
   async disconnect() {
     this._connection.close();
-
     this._data_queues.clear();
-    this.subscriptions.clear();
   }
 
   async send_request(operation: string, params: {}, format: RequestFormats, deltas: boolean) {
     if (this._connection.readyState !== WebSocket.OPEN) {
-      throw new Error("WebSocket connection lost");
+      throw new Error("WebSocket connection expected to be 'OPEN' when sending a request");
     }
 
     const id = crypto.randomUUID();
@@ -271,8 +269,6 @@ export class Client {
     };
 
     this._data_queues.set(id, []);
-    this.subscriptions.set(id, { request, cursor: null });
-
     this._connection.send(JSON.stringify(request));
 
     return this.handle_request(id);
@@ -280,38 +276,39 @@ export class Client {
 
   async *handle_request(id: string) {
     const queue = this._data_queues.get(id);
-
     if (!queue) return;
 
     while (this._connection.readyState === WebSocket.OPEN) {
-      while (queue.length === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+      if (queue.length === 0) {
+        await new Promise((resolve) => setTimeout(resolve, WAIT_INTERVAL));
+
+        continue;
       }
 
-      const item = queue.shift()!;
+      const item = queue.shift();
       if (!item) break;
 
       const { header, body } = item;
 
       if (header.kind && header.kind.startsWith("Continue")) {
-        const subscription = this.subscriptions.get(id);
-        if (subscription && header.cursor) {
-          subscription.cursor = header.cursor;
-        }
-
         yield body;
       } else if (header.kind === "Start") {
         continue;
-      } else if (header.kind === "End") {
-        break;
-      } else if (header.kind === "Error") {
-        throw new Error(body.toString());
       } else {
+        this._data_queues.delete(id);
+
+        if (header.kind === "End") {
+          break;
+        }
+
+        this.disconnect();
+
+        if (header.kind === "Error") {
+          throw new Error(body.toString());
+        }
+
         throw new Error(`Unexpected kind of response from server: ${header.kind}`);
       }
     }
-
-    this._data_queues.delete(id);
-    this.subscriptions.delete(id);
   }
 }

@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let stream = client
-        .get_blocks_by_format(request, Format::Json, false)
+        .get_blocks_by_format(request, Format::JsonStream, false)
         .await
         .unwrap();
     futures::pin_mut!(stream);

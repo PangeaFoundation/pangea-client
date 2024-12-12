@@ -1,6 +1,6 @@
 {
   "name": "pangea-client",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Pangea Client connects you to The First Immersive Web3 Environment",
   "author": {
     "name": "PangeaFoundation",
@@ -57,10 +57,6 @@
   },
   "scripts": {
     "prepare": "npm run build",
-    "prepack": "node scripts/pack.js",
-    "pack": "rm -rf target/package && mkdir -p target/package && npm pack && mv pangea-client-*.tgz target/package/",
-    "postpack": "node scripts/postpack.js",
-    "publish": "npm publish target/package/pangea-client-*.tgz",
     "build": "npm run build:swc && npm run build:types",
     "build-dev": "npm run build-dev:swc && npm run build:types",
     "build:swc": "swc src -d target --config-file .swcrc",
@@ -72,7 +68,7 @@
     "example:jsonstream-status": "ts-node -e \"import { main } from './examples/jsonstream-status'; main()\""
   },
   "files": [
-    "target",
+    "target/src",
     "README.md"
   ]
 }
