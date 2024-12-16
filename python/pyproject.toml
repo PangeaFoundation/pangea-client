@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pangea-client"
 repository = "https://github.com/PangeaFoundation/pangea-client"
-version = "0.3.1"
+version = "0.3.2"
 description = "Pangea Client connects you to The First Immersive Web3 Environment"
 authors = ["Pangea Foundation <info@pangea.foundation>"]
 homepage = "https://pangea.foundation"

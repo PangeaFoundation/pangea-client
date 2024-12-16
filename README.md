@@ -20,7 +20,7 @@ Access to the API via `pangea-client` requires credentials, please [apply for ac
 
 Once credentials are issued, they will need to be set in the environment variables.
 
-The easiest way to use these credentials is to create a `.env` file **in the sub-folder for the language used** (rust, python, node), and populate it like so:
+The easiest way to use these credentials is to create a `.env` file in the project root folder and populate it like so:
 
 ```sh
 PANGEA_USERNAME=xxxxx

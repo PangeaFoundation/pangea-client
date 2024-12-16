@@ -23,6 +23,8 @@ pub enum HealthStatus {
     #[default]
     #[strum(to_string = "OK")]
     Ok,
+    #[strum(to_string = "Down")]
+    Down,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Default)]

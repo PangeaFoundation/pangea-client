@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use ethers_core::types::H256;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -14,6 +13,8 @@ use crate::{
     query::Bound,
     utils::serialize_comma_separated,
 };
+
+use fuel_core_types::fuel_types::Address;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
 #[allow(non_snake_case)]
@@ -75,7 +76,7 @@ pub struct GetFuelLogsRequest {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub id__in: HashSet<H256>,
+    pub id__in: HashSet<Address>,
 
     #[serde(default)]
     #[serde(
@@ -134,21 +135,21 @@ pub struct GetFuelTxsRequest {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub metadata_contract_id__in: HashSet<H256>,
+    pub metadata_contract_id__in: HashSet<Address>,
 
     #[serde(default)]
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub input_contract_contract_id__in: HashSet<H256>,
+    pub input_contract_contract_id__in: HashSet<Address>,
 
     #[serde(default)]
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub mint_asset_id__in: HashSet<H256>,
+    pub mint_asset_id__in: HashSet<Address>,
 
     #[serde(default)]
     pub mint_amount__lte: Option<u64>,
@@ -237,14 +238,14 @@ pub struct GetFuelMessagesRequest {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub sender__in: HashSet<H256>,
+    pub sender__in: HashSet<Address>,
 
     #[serde(default)]
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub recipient__in: HashSet<H256>,
+    pub recipient__in: HashSet<Address>,
 
     #[serde(default)]
     pub amount__gte: Option<u64>,
@@ -301,17 +302,17 @@ pub struct GetSparkMarketRequest {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub base_asset__in: HashSet<H256>,
+    pub base_asset__in: HashSet<Address>,
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub quote_asset__in: HashSet<H256>,
+    pub quote_asset__in: HashSet<Address>,
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub market_id__in: HashSet<H256>,
+    pub market_id__in: HashSet<Address>,
 }
 
 impl Default for GetSparkMarketRequest {
@@ -350,7 +351,7 @@ pub struct GetSparkOrderRequest {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub order_id__in: HashSet<H256>,
+    pub order_id__in: HashSet<Address>,
 
     #[serde(default)]
     #[serde(
@@ -375,23 +376,23 @@ pub struct GetSparkOrderRequest {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub user__in: HashSet<H256>,
+    pub user__in: HashSet<Address>,
     #[serde(default)]
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub asset__in: HashSet<H256>,
+    pub asset__in: HashSet<Address>,
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub market_id__in: HashSet<H256>,
+    pub market_id__in: HashSet<Address>,
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub address__in: HashSet<H256>,
+    pub address__in: HashSet<Address>,
 }
 
 impl Default for GetSparkOrderRequest {
@@ -437,7 +438,7 @@ pub struct GetUtxoRequest {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub address__in: HashSet<H256>,
+    pub address__in: HashSet<Address>,
 }
 
 impl Default for GetUtxoRequest {
@@ -474,14 +475,14 @@ pub struct GetSrc20 {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub contract_id__in: HashSet<H256>,
+    pub contract_id__in: HashSet<Address>,
 
     #[serde(default)]
     #[serde(
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub asset_id__in: HashSet<H256>,
+    pub asset_id__in: HashSet<Address>,
 
     #[serde(default)]
     #[serde(
@@ -542,7 +543,7 @@ pub struct GetSrc7 {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub asset__in: HashSet<H256>,
+    pub asset__in: HashSet<Address>,
 
     #[serde(default)]
     #[serde(
@@ -556,7 +557,7 @@ pub struct GetSrc7 {
         serialize_with = "serialize_comma_separated",
         skip_serializing_if = "HashSet::is_empty"
     )]
-    pub sender__in: HashSet<H256>,
+    pub sender__in: HashSet<Address>,
 }
 
 impl Default for GetSrc7 {
