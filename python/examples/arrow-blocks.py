@@ -8,7 +8,7 @@ load_dotenv(override=True)
 
 
 async def main():
-    async with Client() as client:
+    async with Client(anyone_enabled=True) as client:
         blocks = await client.get_blocks(
             params={
                 "chains": ["ETH"],

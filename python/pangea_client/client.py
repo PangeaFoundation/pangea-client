@@ -4,6 +4,10 @@ import json
 import os
 import uuid
 import websockets
+import socks
+import socket
+from anon_python_sdk import AnonRunner, AnonConfig
+import time
 
 from .types import Format
 from enum import Enum
@@ -62,6 +66,9 @@ class Client:
         username=None,
         password=None,
         is_secure=True,
+        anyone_enabled=False,
+        anyone_host="127.0.0.1",
+        anyone_port=9050,
     ):
         self.username = username or os.getenv("PANGEA_USERNAME")
         if not self.username:
@@ -77,6 +84,19 @@ class Client:
         self.request_handlers = {}
         self.receive_task = None
         self._shutdown_signal = asyncio.Event()
+
+        if anyone_enabled:
+            socks.set_default_proxy(socks.SOCKS5, anyone_host, anyone_port)
+            socket.socket = socks.socksocket
+            config = AnonConfig(
+                auto_terms_agreement=True,
+                control_port=0,
+                socks_port=anyone_port,
+            )
+            self.runner = AnonRunner(config)
+            self.runner.start()
+            time.sleep(5) #todo: create await interface for runner.start()
+
 
     async def __aenter__(self):
         await self.connect()
@@ -116,6 +136,7 @@ class Client:
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         await self.disconnect()
+        self.runner.stop()
 
     async def connect(self):
         if self.connection:
